@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Baoding v4 networks</title>
+<style>
+  :root { --bg:#fbfbfa; --fg:#1d2126; --mut:#5f6875; --line:#c3c9d2; --card:#fff; --edge:#7a828d;
+          --real-f:#e3f3e5; --real-s:#3f8f4a; --sim-f:#fdeedd; --sim-s:#c27a2c;
+          --net-f:#f3f4f7; --net-s:#7d8692; --act-f:#e4eefc; --act-s:#3a74c4; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --bg:#15171b; --fg:#e6e8eb; --mut:#9aa3ae; --line:#3a404a; --card:#1d2026; --edge:#8c95a1;
+    --real-f:#1d3524; --real-s:#6cc27a; --sim-f:#3d2c17; --sim-s:#e0a35c;
+    --net-f:#22262d; --net-s:#8a94a1; --act-f:#1b2c45; --act-s:#6fa3ec; } }
+  :root[data-theme="dark"] {
+    --bg:#15171b; --fg:#e6e8eb; --mut:#9aa3ae; --line:#3a404a; --card:#1d2026; --edge:#8c95a1;
+    --real-f:#1d3524; --real-s:#6cc27a; --sim-f:#3d2c17; --sim-s:#e0a35c;
+    --net-f:#22262d; --net-s:#8a94a1; --act-f:#1b2c45; --act-s:#6fa3ec; }
+  body { background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+         max-width:1240px; margin:0 auto; padding:24px 16px 56px; }
+  h1 { font-size:23px; margin:0 0 6px; } h2 { font-size:18px; margin:40px 0 8px; }
+  p, li { margin:6px 0; } .mut { color:var(--mut); } code { font-size:13px; }
+  figure { margin:14px 0 6px; } .fig { overflow-x:auto; }
+  figcaption { color:var(--mut); font-size:13.5px; margin-top:6px; }
+  .legend { display:flex; flex-wrap:wrap; gap:8px 16px; font-size:13px; color:var(--mut); margin:10px 0; }
+  .legend i { display:inline-block; width:22px; height:13px; border:1.5px solid; border-radius:4px; vertical-align:-2px; margin-right:6px; }
+  table { border-collapse:collapse; margin:10px 0; font-size:13.5px; }
+  td, th { border:1px solid var(--line); padding:5px 10px; text-align:left; vertical-align:top; }
+  th { background:var(--card); }
+  /* inline SVG */
+  svg { display:block; width:100%; height:auto; min-width:760px; color:var(--fg); }
+  svg text { fill:currentColor; font-size:13px; }
+  svg .h { font-weight:600; } svg .m { fill:var(--mut); font-size:11.5px; }
+  svg .s { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11.5px; fill:var(--mut); }
+  svg .c { text-anchor:middle; } svg .e { text-anchor:end; }
+  svg rect { stroke-width:1.5; }
+  svg .real { fill:var(--real-f); stroke:var(--real-s); } svg .sim { fill:var(--sim-f); stroke:var(--sim-s); }
+  svg .net { fill:var(--net-f); stroke:var(--net-s); } svg .act { fill:var(--act-f); stroke:var(--act-s); }
+  svg .grp { fill:none; stroke:var(--line); stroke-dasharray:5 4; }
+  svg .dash { stroke-dasharray:5 4; }
+  svg .w { stroke:var(--edge); stroke-width:1.6; fill:none; }
+  svg .ah, svg .dot { fill:var(--edge); }
+  svg .br { stroke:var(--mut); stroke-width:1.2; fill:none; }
+</style>
+</head>
+<body>
+<h1>Baoding v4: teacher and student networks</h1>
+<p class="mut">A PPO teacher learns the task from noisy ball positions. DAgger then distills it into a student that sees
+only the wrist camera and what the real hand measures. Deployed student: <code>--enc ssm --stack 3</code>.
+Code: <code>robotics/policies/rl/baoding_noisy_train.py</code> (teacher), <code>baoding_dagger.py</code> (student),
+<code>baoding_noisy_env.py</code> (observations). 20 joints, 20 Hz. Image shapes are H×W×C.</p>
+<div class="legend">
+  <span><i style="background:var(--real-f);border-color:var(--real-s)"></i>available on the real hand</span>
+  <span><i style="background:var(--sim-f);border-color:var(--sim-s)"></i>simulation only</span>
+  <span><i style="background:var(--net-f);border-color:var(--net-s)"></i>network / layer</span>
+  <span><i style="background:var(--act-f);border-color:var(--act-s)"></i>deployed output</span>
+  <span><i style="border-style:dashed;border-color:var(--net-s)"></i>training only</span>
+</div>
+
+<h2>1. Who sees what (training in simulation)</h2>
+<figure><div class="fig">
+<svg viewBox="0 0 1000 480" role="img" aria-label="The teacher actor needs noisy ball positions, which exist only in simulation; the student uses proprioception and wrist images, both available on the real hand, and is trained by MSE to the teacher's action.">
+  <defs><marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+  <text class="m c" x="124" y="20">inputs (sim obs dict)</text>
+  <text class="m c" x="425" y="20">networks</text>
+  <text class="m c" x="686" y="20">outputs</text>
+  <text class="m c" x="910" y="20">training signal</text>
+  <rect class="grp" x="10" y="30" width="228" height="362" rx="10"/>
+
+  <rect class="sim" x="20" y="46" width="208" height="56" rx="7"/>
+  <text class="h" x="32" y="70">privileged state · 96</text><text class="m" x="32" y="88">exact state + DR parameters</text>
+  <rect class="sim" x="20" y="130" width="208" height="56" rx="7"/>
+  <text class="h" x="32" y="154">noisy ball positions · 18</text><text class="m" x="32" y="172">now + 2 previous steps</text>
+  <rect class="real" x="20" y="214" width="208" height="56" rx="7"/>
+  <text class="h" x="32" y="238">proprio + command · 70</text><text class="m" x="32" y="256">joints, targets, gravity, speed</text>
+  <rect class="real" x="20" y="320" width="208" height="56" rx="7"/>
+  <text class="h" x="32" y="344">wrist RGB · 3 frames</text><text class="m" x="32" y="362">64×88×3 each, 50–100 ms old</text>
+
+  <rect class="net dash" x="320" y="46" width="210" height="56" rx="7"/>
+  <text class="h" x="332" y="70">Critic</text><text class="m" x="332" y="88">MLP 512–256–128 · 214,017 params</text>
+  <rect class="net" x="320" y="130" width="210" height="140" rx="7"/>
+  <text class="h" x="332" y="184">Teacher actor</text><text class="m" x="332" y="203">MLP 512–256–128, swish</text>
+  <text class="m" x="332" y="221">214,952 params</text><text class="m" x="332" y="239">trained by PPO, frozen in DAgger</text>
+  <rect class="net" x="320" y="300" width="210" height="96" rx="7"/>
+  <text class="h" x="332" y="326">Student</text><text class="m" x="332" y="345">CNN → keypoints → MLP</text>
+  <text class="m" x="332" y="363">387,649 params (Fig. 2)</text><text class="m" x="332" y="381">trained by DAgger</text>
+  <rect class="act" x="458" y="310" width="62" height="18" rx="9"/><text class="m c" x="489" y="323">deployed</text>
+
+  <line class="w" x1="228" y1="74" x2="320" y2="74" marker-end="url(#a1)"/>
+  <line class="w" x1="228" y1="158" x2="320" y2="158" marker-end="url(#a1)"/>
+  <line class="w" x1="228" y1="242" x2="320" y2="242" marker-end="url(#a1)"/>
+  <path class="w" d="M266,242 V322 H320" marker-end="url(#a1)"/><circle class="dot" cx="266" cy="242" r="3.5"/>
+  <line class="w" x1="228" y1="356" x2="320" y2="356" marker-end="url(#a1)"/>
+
+  <rect class="net dash" x="606" y="46" width="160" height="56" rx="7"/>
+  <text class="h" x="618" y="70">value V</text><text class="s" x="618" y="88">1 · PPO advantage</text>
+  <rect class="net" x="606" y="172" width="160" height="56" rx="7"/>
+  <text class="h" x="618" y="196">teacher action a*</text><text class="s" x="618" y="214">20 · tanh(mean)</text>
+  <rect class="act" x="606" y="320" width="160" height="56" rx="7"/>
+  <text class="h" x="618" y="344">student action a</text><text class="s" x="618" y="362">20 · tanh</text>
+  <line class="w" x1="530" y1="74" x2="606" y2="74" marker-end="url(#a1)"/>
+  <line class="w" x1="530" y1="200" x2="606" y2="200" marker-end="url(#a1)"/>
+  <line class="w" x1="530" y1="348" x2="606" y2="348" marker-end="url(#a1)"/>
+
+  <rect class="net dash" x="826" y="236" width="168" height="88" rx="7"/>
+  <text class="h" x="838" y="259">DAgger loss</text><text class="s" x="838" y="278">MSE(a, a*)</text>
+  <text class="s" x="838" y="295">+ 0.1 · ball MSE</text><text class="m" x="838" y="313">updates the student only</text>
+  <path class="w" d="M766,200 H910 V236" marker-end="url(#a1)"/><text class="m" x="780" y="192">label</text>
+  <path class="w" d="M766,348 H910 V324" marker-end="url(#a1)"/><text class="m" x="780" y="340">prediction</text>
+
+  <rect class="net" x="20" y="420" width="208" height="48" rx="7"/>
+  <text class="h" x="32" y="440">Simulator</text><text class="m" x="32" y="457">MJX-Warp · physics + visual DR</text>
+  <line class="w" x1="124" y1="420" x2="124" y2="394" marker-end="url(#a1)"/><text class="m" x="132" y="411">obs, every 50 ms</text>
+  <path class="w" d="M686,376 V444 H228" marker-end="url(#a1)"/>
+  <text class="s c" x="457" y="437">ctrl ← clip(ctrl + 0.15·a)</text>
+  <text class="m c" x="457" y="461">iteration 0 steps with a* instead (behaviour cloning)</text>
+</svg></div>
+<figcaption>The only difference between the two actors' inputs is the 18 noisy ball positions: the teacher reads them,
+the student has to get them from the wrist frames. The critic (privileged, dashed) exists only for PPO. On the real
+hand (not run yet) only the green inputs exist, so only the student can run there.</figcaption>
+</figure>
+
+<h2>2. Student (deployed): tensor flow</h2>
+<figure><div class="fig">
+<svg viewBox="0 76 1108 346" role="img" aria-label="Student network: each of the 3 wrist frames goes through a shared CNN and a spatial softmax to 32 keypoints; the 192 keypoint coordinates feed an image-only ball head, and, concatenated with 70 proprio values, an MLP with an action head and a ball-position head.">
+  <defs><marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+  <rect class="real" x="28" y="86" width="140" height="80" rx="6"/>
+  <rect class="real" x="22" y="92" width="140" height="80" rx="6"/>
+  <rect class="real" x="16" y="98" width="140" height="80" rx="6"/>
+  <text class="h" x="28" y="122">wrist RGB × 3</text><text class="s" x="28" y="140">64×88×3 each</text>
+  <text class="m" x="28" y="156">newest first</text><text class="m" x="28" y="171">x/255 − 0.5</text>
+  <line class="w" x1="168" y1="138" x2="218" y2="138" marker-end="url(#a2)"/>
+
+  <rect class="grp" x="206" y="92" width="288" height="226" rx="10"/>
+  <text class="h" x="218" y="113" style="font-size:12.5px">per-frame encoder · shared weights, run 3×</text>
+  <rect class="net" x="218" y="124" width="264" height="28" rx="5"/>
+  <text x="228" y="143" style="font-size:12.5px">Conv 5×5, stride 2 · ReLU</text><text class="s e" x="472" y="143">32×44×32</text>
+  <rect class="net" x="218" y="162" width="264" height="28" rx="5"/>
+  <text x="228" y="181" style="font-size:12.5px">Conv 3×3 · ReLU</text><text class="s e" x="472" y="181">32×44×64</text>
+  <rect class="net" x="218" y="200" width="264" height="28" rx="5"/>
+  <text x="228" y="219" style="font-size:12.5px">Conv 3×3 · ReLU</text><text class="s e" x="472" y="219">32×44×64</text>
+  <rect class="net" x="218" y="238" width="264" height="28" rx="5"/>
+  <text x="228" y="257" style="font-size:12.5px">Conv 1×1 → 32 heatmaps</text><text class="s e" x="472" y="257">32×44×32</text>
+  <rect class="act" x="218" y="276" width="264" height="28" rx="5"/>
+  <text class="h" x="228" y="295" style="font-size:12.5px">Spatial softmax</text><text class="s e" x="472" y="295">32 × (x, y)</text>
+  <line class="w" x1="350" y1="152" x2="350" y2="162" marker-end="url(#a2)"/>
+  <line class="w" x1="350" y1="190" x2="350" y2="200" marker-end="url(#a2)"/>
+  <line class="w" x1="350" y1="228" x2="350" y2="238" marker-end="url(#a2)"/>
+  <line class="w" x1="350" y1="266" x2="350" y2="276" marker-end="url(#a2)"/>
+
+  <line class="w" x1="482" y1="290" x2="540" y2="290" marker-end="url(#a2)"/><text class="m c" x="511" y="282">64</text>
+  <rect class="net" x="540" y="262" width="100" height="56" rx="7"/>
+  <text class="h c" x="590" y="286">keypoints f</text><text class="s c" x="590" y="304">3 × 64 = 192</text>
+
+  <path class="w" d="M590,262 V150 H690" marker-end="url(#a2)"/><text class="m" x="598" y="214">f only, no proprio</text>
+  <rect class="net" x="690" y="126" width="240" height="48" rx="7"/>
+  <text class="c" x="810" y="155">Dense 128 · swish → Dense 6</text>
+  <line class="w" x1="930" y1="150" x2="972" y2="150" marker-end="url(#a2)"/>
+  <rect class="net dash" x="972" y="126" width="124" height="48" rx="7"/>
+  <text class="h" x="982" y="146">ball pos. · 6</text><text class="s" x="982" y="163">image only</text>
+
+  <line class="w" x1="640" y1="290" x2="670" y2="290" marker-end="url(#a2)"/>
+  <rect class="net" x="670" y="270" width="80" height="40" rx="7"/>
+  <text class="c" x="710" y="287">concat</text><text class="s c" x="710" y="302">262</text>
+  <rect class="real" x="605" y="360" width="210" height="52" rx="7"/>
+  <text class="h c" x="710" y="381">proprio + command · 70</text><text class="m c" x="710" y="399">normalized (Fig. 3)</text>
+  <line class="w" x1="710" y1="360" x2="710" y2="310" marker-end="url(#a2)"/>
+
+  <line class="w" x1="750" y1="290" x2="790" y2="290" marker-end="url(#a2)"/>
+  <rect class="net" x="790" y="262" width="140" height="56" rx="7"/>
+  <text class="h c" x="860" y="286">MLP 512–256–128</text><text class="m c" x="860" y="304">swish</text>
+  <path class="w" d="M930,290 H950 V246 H972" marker-end="url(#a2)"/>
+  <path class="w" d="M950,290 V334 H972" marker-end="url(#a2)"/><circle class="dot" cx="950" cy="290" r="3.5"/>
+  <rect class="act" x="972" y="222" width="124" height="48" rx="7"/>
+  <text class="h" x="982" y="242">action · 20</text><text class="s" x="982" y="259">Dense 20 · tanh</text>
+  <rect class="net dash" x="972" y="310" width="124" height="48" rx="7"/>
+  <text class="h" x="982" y="330">ball pos. · 6</text><text class="s" x="982" y="347">Dense 6</text>
+</svg></div>
+<figcaption>Spatial softmax: a softmax over the 32×44 positions of each heatmap (one learned temperature), then the
+expected (x, y) in [−1, 1], so each frame becomes 32 points. The two dashed heads predict both ball centers
+(hand frame, 10·(p − orbit center)) for the 0.1-weighted auxiliary loss. The image-only head sees no proprio, so it
+tests vision alone on real frames. It was added after stage 3, so the stage-2 checkpoints do not have it (without it: 362,171 params).
+The action is a joint-target increment: ctrl ← clip(ctrl + 0.15 rad · a, joint range).</figcaption>
+</figure>
+<p class="mut"><b>Variant <code>--enc flat</code></b> (stage 2 comparison): the 3 frames are stacked on channels (64×88×9),
+then Conv 8×8/4 (32) → 4×4/2 (64) → 3×3 (64), ReLU, flattened to 8×11×64 = 5,632 in place of f. Everything after is the same; 3,897,536 params.</p>
+
+<h2>3. Input vectors, aligned</h2>
+<figure><div class="fig">
+<svg viewBox="0 0 1210 272" role="img" aria-label="The three input vectors share the first 60 entries; the teacher adds 18 noisy ball positions, the critic adds exact ball state, delay, bias, DR parameters and true gravity.">
+  <text class="h" x="16" y="58">Student</text><text class="s" x="16" y="75">vis_state · 70</text>
+  <text class="h" x="16" y="142">Teacher actor</text><text class="s" x="16" y="159">state · 88</text>
+  <text class="h" x="16" y="226">Critic</text><text class="s" x="16" y="243">privileged · 96 (no noise)</text>
+
+  <!-- student: 1 unit = 10 px from x=230 -->
+  <rect class="real" x="230" y="40" width="200" height="40"/><text class="c" x="330" y="57">q</text><text class="s c" x="330" y="72">20</text>
+  <rect class="real" x="430" y="40" width="200" height="40"/><text class="c" x="530" y="57">0.1·q̇</text><text class="s c" x="530" y="72">20</text>
+  <rect class="real" x="630" y="40" width="200" height="40"/><text class="c" x="730" y="57">ctrl</text><text class="s c" x="730" y="72">20</text>
+  <rect class="real" x="830" y="40" width="60" height="40"/><text class="c" x="860" y="57">goal</text><text class="s c" x="860" y="72">6</text>
+  <rect class="real" x="890" y="40" width="30" height="40"/><text class="c" x="905" y="57">g</text><text class="s c" x="905" y="72">3</text>
+  <rect class="real" x="920" y="40" width="10" height="40"/><text class="s c" x="925" y="34">cmd 1</text>
+
+  <!-- teacher actor -->
+  <rect class="real" x="230" y="124" width="200" height="40"/><text class="c" x="330" y="141">q</text><text class="s c" x="330" y="156">20</text>
+  <rect class="real" x="430" y="124" width="200" height="40"/><text class="c" x="530" y="141">0.1·q̇</text><text class="s c" x="530" y="156">20</text>
+  <rect class="real" x="630" y="124" width="200" height="40"/><text class="c" x="730" y="141">ctrl</text><text class="s c" x="730" y="156">20</text>
+  <rect class="sim" x="830" y="124" width="180" height="40"/><text class="h c" x="920" y="141">noisy balls</text><text class="s c" x="920" y="156">18</text>
+  <rect class="real" x="1010" y="124" width="60" height="40"/><text class="c" x="1040" y="141">goal</text><text class="s c" x="1040" y="156">6</text>
+  <rect class="real" x="1070" y="124" width="30" height="40"/><text class="c" x="1085" y="141">g</text><text class="s c" x="1085" y="156">3</text>
+  <rect class="real" x="1100" y="124" width="10" height="40"/><text class="s c" x="1105" y="178">cmd 1</text>
+  <path class="br" d="M830,104 V98 H1010 V104"/><text class="m c" x="920" y="94" style="font-size:11px">student must infer from images</text>
+
+  <!-- critic -->
+  <rect class="real" x="230" y="208" width="200" height="40"/><text class="c" x="330" y="225">q</text><text class="s c" x="330" y="240">20</text>
+  <rect class="real" x="430" y="208" width="200" height="40"/><text class="c" x="530" y="225">0.1·q̇</text><text class="s c" x="530" y="240">20</text>
+  <rect class="real" x="630" y="208" width="200" height="40"/><text class="c" x="730" y="225">ctrl</text><text class="s c" x="730" y="240">20</text>
+  <rect class="sim" x="830" y="208" width="60" height="40"/><text class="c" x="860" y="225">balls</text><text class="s c" x="860" y="240">6</text>
+  <rect class="sim" x="890" y="208" width="60" height="40"/><text class="c" x="920" y="225">ball v</text><text class="s c" x="920" y="240">6</text>
+  <rect class="real" x="950" y="208" width="60" height="40"/><text class="c" x="980" y="225">goal</text><text class="s c" x="980" y="240">6</text>
+  <rect class="sim" x="1010" y="208" width="10" height="40"/><text class="s c" x="1015" y="200">delay 1</text>
+  <rect class="sim" x="1020" y="208" width="60" height="40"/><text class="c" x="1050" y="225">bias</text><text class="s c" x="1050" y="240">6</text>
+  <rect class="sim" x="1080" y="208" width="70" height="40"/><text class="c" x="1115" y="225">DR</text><text class="s c" x="1115" y="240">7</text>
+  <rect class="sim" x="1150" y="208" width="30" height="40"/><text class="c" x="1165" y="225">g</text><text class="s c" x="1165" y="240">3</text>
+  <rect class="real" x="1180" y="208" width="10" height="40"/><text class="s c" x="1185" y="262">cmd 1</text>
+  <path class="br" d="M230,34 V28 H830 V34"/><text class="m c" x="530" y="22" style="font-size:11px">same 60 entries in all three (order as in the code)</text>
+</svg></div>
+<figcaption>Bar width = number of entries (1 entry = 10 px). The student's 70 is exactly the teacher's 88 minus the
+noisy balls. Before the networks, every vector is normalized (teacher, critic: brax running mean/std;
+student: mean/std of the DAgger data).</figcaption>
+</figure>
+
+<table>
+<tr><th>Segment</th><th>Size</th><th>Content</th><th>On the real hand</th></tr>
+<tr><td>q</td><td>20</td><td>joint angles (sim noise σ 0.005 rad)</td><td>hand encoders</td></tr>
+<tr><td>0.1·q̇</td><td>20</td><td>joint velocities (sim noise σ 0.1 rad/s)</td><td>hand encoders</td></tr>
+<tr><td>ctrl</td><td>20</td><td>previous joint targets</td><td>last command sent</td></tr>
+<tr><td>goal</td><td>6</td><td>target (y, z) of both balls, 10·(p − orbit center), and sin / cos of the target phase</td><td>clock + speed command</td></tr>
+<tr><td>g</td><td>3</td><td>unit gravity direction in the hand frame (per-episode error σ 0.03 per axis, ≈ 2°)</td><td>UR5 forward kinematics</td></tr>
+<tr><td>cmd</td><td>1</td><td>ω / π; period T ∈ [2, 16] s per revolution</td><td>set by the operator</td></tr>
+<tr><td>noisy balls</td><td>18</td><td>both ball centers, now + 2 previous steps, 10·(p − orbit center); 2 mm noise per step + 1 mm per-episode bias</td><td>none: the student infers them from the images</td></tr>
+<tr><td>critic only</td><td>36</td><td>exact ball positions (6), ball velocities (6), action delay 0/1/2 steps (1), ball-measurement bias ×1000 (6),
+  DR summary (7: two ball masses, hand / ball friction, kp, log damping, solref), true gravity (3)</td><td>none</td></tr>
+</table>
+
+<h2>4. Training</h2>
+<table>
+<tr><th></th><th>Teacher (brax PPO)</th><th>Student (DAgger)</th></tr>
+<tr><td>trains</td><td>actor + critic</td><td>student; teacher frozen</td></tr>
+<tr><td>rollouts</td><td>2048 envs, 400-step episodes; 150M steps, then the DR teacher warm-starts from it for 200M</td>
+  <td>10 iterations × 128 envs × 400 steps, aggregated; iteration 0 is driven by the teacher, iterations 1–9 by the student; the teacher labels every visited step</td></tr>
+<tr><td>loss</td><td>PPO (γ 0.99, clip 0.2, entropy 0.01); reward = ball tracking + rotation capped at the commanded pace − drop</td>
+  <td>MSE(a, a*) + 0.1 · [MSE(ball pos.) + MSE(ball pos., image only)]</td></tr>
+<tr><td>optimizer</td><td>Adam 3e-4</td><td>Adam 3e-4, batch 256, 3000 steps per iteration</td></tr>
+<tr><td>action head</td><td>40 = mean + scale (tanh-normal); deterministic tanh(mean) at evaluation and as the DAgger label</td><td>20, tanh</td></tr>
+</table>
+</body>
+</html>

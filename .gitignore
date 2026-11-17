@@ -1,0 +1,16 @@
+out/
+__pycache__/
+*.pyc
+.pytest_cache/
+.claude/
+*.egg-info/
+/build/
+/dist/
+
+# Independent local checkout; keep its history separate.
+/old_ros_env_for_reference/
+
+# ROS 2 workspace build products (the package source lives under ros2_ws/src).
+/ros2_ws/build/
+/ros2_ws/install/
+/ros2_ws/log/

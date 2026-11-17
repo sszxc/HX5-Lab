@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hx5-lab"
+version = "0.1.0"
+description = "MuJoCo sim, RL, teleop and hardware tools for a UR5 + HX5-D20 hand"
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["robotics", "robotics.*"]
+namespaces = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
